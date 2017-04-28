@@ -18,7 +18,7 @@
 
 FactoryGirl.define do
   factory :deal_feedback do
-    
+
   end
 
 end
