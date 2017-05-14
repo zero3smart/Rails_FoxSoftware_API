@@ -62,14 +62,14 @@
           ],
           "responseMessages": [
             {
-              "code": 200,
-              "responseModel": "User",
-              "message": "Success"
+              "code": "not_valid",
+              "responseModel": null,
+              "message": null
             },
             {
-              "code": 500,
-              "responseModel": null,
-              "message": "not_valid"
+              "code": "ok",
+              "responseModel": "User",
+              "message": "Success"
             }
           ],
           "method": "post",

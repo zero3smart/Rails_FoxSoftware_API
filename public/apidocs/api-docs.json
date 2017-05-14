@@ -16,6 +16,10 @@
       "description": "Shipment resource"
     },
     {
+      "path": "http://foxsoftware.herokuapp.com/apidocs/api/v1/bids.{format}",
+      "description": "Bids resource"
+    },
+    {
       "path": "http://foxsoftware.herokuapp.com/apidocs/api/v1/users.{format}",
       "description": "User Management"
     },
