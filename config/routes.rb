@@ -14,12 +14,16 @@ Rails.application.routes.draw do
       resources :shipments do
         member do
           post :toggle_active
+          get :highest_bid
+          get :current_bids
         end
         collection do
           get :my_listing
         end
       end
-      resources :bids
+      resources :bids, except: [:destroy] do
+
+      end
       resources :shipment_feedbacks
       resources :users do
         collection do

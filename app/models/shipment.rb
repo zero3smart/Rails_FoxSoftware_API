@@ -42,6 +42,7 @@ class Shipment < ActiveRecord::Base
   belongs_to :shipper_info
   belongs_to :receiver_info
 
+  has_many :bids, dependent: :destroy
   has_many :ship_invitations, dependent: :destroy
   has_many :shipment_feedbacks, dependent: :destroy
 
@@ -91,7 +92,23 @@ class Shipment < ActiveRecord::Base
   end
 
   def eligible_for_render?(param_secret_id, current_user)
-    (!private_bidding && active?) || (private_bidding? && secret_id == param_secret_id && active?) || user == current_user
+    public_or_active?(param_secret_id) || user == current_user
+  end
+
+  def public_or_active?(param_secret_id)
+    public_active? || (private_bidding? && secret_id == param_secret_id && active?)
+  end
+
+  def public_active?
+    !private_bidding? && active?
+  end
+
+  def has_invitation_for?(user)
+    ship_invitations.for_user(user.id).count > 0
+  end
+
+  def private!
+    update_attribute :private_bidding, true
   end
 
   # Manage ship_invitations here. delete all when [], replace if size>0, or ignore if nil.
@@ -133,7 +150,8 @@ class Shipment < ActiveRecord::Base
   end
 
   def inactive!
-    update_attribute :active, false
+    self.active = false
+    save!
   end
 
 end
