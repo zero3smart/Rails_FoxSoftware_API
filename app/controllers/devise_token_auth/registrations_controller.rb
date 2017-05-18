@@ -10,6 +10,7 @@ module DeviseTokenAuth
 
     swagger_api :create do
       summary 'Create user with email'
+      notes 'When invited user register, we will find and assign all shipment invitations by email, so later you can load them from <strong>my_invitations</strong> query'
       param :form, :first_name, :string, :required, 'First Name'
       param :form, :last_name, :string, :required, 'Last Name'
       param :form, :email, :string, :required, 'Email'
@@ -18,8 +19,8 @@ module DeviseTokenAuth
       param :form, :about, :string, :optional, 'About me'
       param :form, :user_type, :string, :required, "User type, 'carrier' or 'client'"
       # param :form, :provider, :string, :required, "Provider, one of: (email,facebook,google_oauth2,linkedin)", {defaultValue: 'email'}
-      response 500, :not_valid
-      response :ok, 'Success', :User
+      response 'not_valid'
+      response 'ok', 'Success', :User
     end
     # :nocov:
     def create
