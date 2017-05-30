@@ -7,7 +7,7 @@ RSpec.describe Api::V1::AddressInfosController, type: :controller do
 
     before do
       @attrs = {state: 'CA', zip_code: '20860', city: 'Palm Springs', address1: 'Lake street 21',
-                appointment: true, contact_name: 'Alex', type: 'ShipperInfo'}
+                appointment: true, contact_name: 'Alex', type: 'ShipperInfo', is_default: false, title: 'Zooloo'}
     end
 
     it 'create an AddressInfo of ShipperInfo type' do
@@ -75,12 +75,20 @@ RSpec.describe Api::V1::AddressInfosController, type: :controller do
       @shipper_info = create :shipper_info, user: @logged_in_user
       ## to test for remain unchanged
       @receivers = create_list :receiver_info, 3, user: @logged_in_user # false, false, true
-      @receiver_default = @receivers.last
+      @receiver_default = @logged_in_user.receiver_infos.last
       @receiver_default.default!
 
       @shippers = create_list :shipper_info, 3, user: @logged_in_user # false, false, true
-      @shipper_default = @shippers.last
+      @shipper_default = @logged_in_user.shipper_infos.last
       @shipper_default.default!
+    end
+
+    it 'should load default addresses' do
+      expect(@receiver_default.is_default?).to eq true
+      expect(@shipper_default.is_default?).to eq true
+      json_query :get, :my_defaults
+      expect(@json[:shipper_info]['id']).to eq @shipper_default.id
+      expect(@json[:receiver_info]['id']).to eq @receiver_default.id
     end
 
     context 'set_as_default_receiver' do
