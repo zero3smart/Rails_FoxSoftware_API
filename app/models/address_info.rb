@@ -59,4 +59,8 @@ class AddressInfo < ActiveRecord::Base
     save!
   end
 
+  def city_state
+    "#{city}, #{state}"
+  end
+
 end
