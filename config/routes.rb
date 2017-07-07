@@ -17,6 +17,8 @@ Rails.application.routes.draw do
           post :toggle_active
           get :lowest_proposal
           get :current_proposals
+          post :set_status
+          get :check_new_proposals
         end
         collection do
           get :my_invitations
