@@ -66,9 +66,6 @@ describe Api::V1::ShipmentsController do
         proposal.reload
         expect(proposal.offered_at).not_to be_falsey
         expect(@shipment.state).to eq :pending
-        mail = ActionMailer::Base.deliveries.last
-        expect(mail.to.first).to eq proposal.user.email
-        expect(mail.subject).to eq 'You got offer for your proposal!'
       else
         expect(@json[:error]).to eq 'bad_role'
       end
@@ -185,10 +182,7 @@ describe Api::V1::ShipmentsController do
 
     it 'should display only my invites in my_invitations' do
       other_ship_invs = create_list :ship_invitation, 2
-      shipment = create :shipment, private_proposing: true
-      shipment.auction!
-      my_ship_invs = create_list :ship_invitation, 3, invitee: @logged_in_user, shipment: shipment # with related shipments
-
+      my_ship_invs = create_list :ship_invitation, 3, invitee: @logged_in_user # with related shipments
       json_query :get, :my_invitations
       expect(@json[:results].size).to eq 3
       my_ships = my_ship_invs.map &:shipment_id
@@ -218,7 +212,6 @@ describe Api::V1::ShipmentsController do
 
       it 'should not show for other private shipment' do
         shipment = create :shipment, private_proposing: true
-        shipment.auction!
         json_query :get, :lowest_proposal, id: shipment.id
         expect(@json[:error]).to eq 'no_access'
       end
@@ -253,10 +246,6 @@ describe Api::V1::ShipmentsController do
           expect(res['price'].to_f < last).to be true
           last = res['price'].to_f
         end
-      end
-
-      it 'should not list draft shipments' do
-
       end
 
       it 'should list shipments with proposals summaries' do
@@ -453,15 +442,6 @@ describe Api::V1::ShipmentsController do
       context 'editing' do
         before do
           @shipment = create :shipment, user: @logged_in_user
-        end
-
-        it 'should display new proposals for check_new_proposals' do
-          @shipment.auction!
-          create_list :proposal, 3, shipment: @shipment
-          expect(@shipment.new_proposals.count).to eq 3
-          create :proposal, shipment: @shipment
-          json_query :get, :check_new_proposals, id: @shipment.id
-          expect(@json[:status]).to eq 1
         end
 
         it 'should let shipper edit its own shipment' do
