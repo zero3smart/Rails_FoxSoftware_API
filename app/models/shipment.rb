@@ -37,6 +37,7 @@
 #  arrive_at_to         :datetime
 #  hide_proposals       :boolean          default(FALSE)
 #  track_frequency      :string
+#  last_review_at       :datetime
 #
 # Indexes
 #
@@ -62,7 +63,7 @@ class Shipment < ActiveRecord::Base
   mount_uploader :picture, ShipmentPictureUploader
   resourcify
 
-  scope :active, ->() {where(active: true)}
+  scope :active, ->() {where(active: true).where("aasm_state != 'draft'") }
   # dont use :public name as scope name :) unless you want be deep in shit
   scope :public_only, ->() {where(private_proposing: false)}
   before_create :set_secret_id
@@ -136,8 +137,8 @@ class Shipment < ActiveRecord::Base
       transitions from: [:proposing, :pending], to: :draft
     end
 
-    # shipper
-    event :offer do
+    # shipper, notify carrier
+    event :offer, after: :notify_carrier do
       transitions from: :proposing, to: :pending
     end
 
@@ -165,10 +166,16 @@ class Shipment < ActiveRecord::Base
 
   # should be after validates_presence_of shipper_info_id and receiver_info_id
   after_validation :validate_addresses
+  before_create :set_last_review_at
+
   # Check that associated addresses belongs to that user
   def validate_addresses
     self.errors.add(:shipper_info_id, 'bad association') unless user.shipper_info_ids.include?(shipper_info_id)
     self.errors.add(:receiver_info_id, 'bad association') unless user.receiver_info_ids.include?(receiver_info_id)
+  end
+
+  def set_last_review_at
+    self.last_review_at = Time.zone.now
   end
 
   # remove all proposals after being called 'pause' event
@@ -214,6 +221,13 @@ class Shipment < ActiveRecord::Base
     user == some_user
   end
 
+  def notify_carrier
+    CarrierMailer.offered_status(self).deliver_now
+  end
+
+  def offered_proposal
+    proposals.where('offered_at IS NOT NULL').first
+  end
   # Check for:
   # -> user has not reached limit of proposals
   # -> user has invitation_for? shipment if private, or shipment active+public
@@ -356,4 +370,10 @@ class Shipment < ActiveRecord::Base
     save!
   end
 
+  # Render new proposals since the last call of this method. update when touched.
+  def new_proposals
+    res = proposals.where('created_at >= ?', last_review_at)
+    update_attribute :last_review_at, Time.zone.now
+    res
+  end
 end
