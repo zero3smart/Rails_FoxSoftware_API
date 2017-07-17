@@ -157,16 +157,23 @@ class Api::V1::ShipmentsController < Api::V1::ApiBaseController
            When updated by Shipper and shipment in status of 'confirm', then shipment will be moved to 'propose' status.<br/>
            It is not possible to update when status >= in_transit.
     UPD
-    response 'not_found'
+    response 'not_found', 'Shipment not found'
+    response 'locked_status', 'Status not eligible to update'
   end
   # :nocov:
   def update
-    if @shipment.update_attributes! allowed_params
-      # TODO fallback to 'propose' state if status == 'offered'
-      # TODO not possible to edit while in status >= in_transit
-      @shipment.invite!(params[:invitations])
+    if @shipment.updateable_in_status?
+      if @shipment.update_attributes! allowed_params
+        @shipment.status_check
+        # TODO fallback to 'propose' state if status == 'offered'
+        # TODO not possible to edit while in status >= in_transit
+        @shipment.invite!(params[:invitations])
+      end
+      render_ok
+    else
+      render_error 'locked_status'
     end
-    render_ok
+
   end
 
   # :nocov:
@@ -196,6 +203,7 @@ class Api::V1::ShipmentsController < Api::V1::ApiBaseController
     response 'bad_transition', 'Not eligible for transition to this status'
     response 'bad_proposal_id', 'No proposal found within shipment scope'
     response 'access_denied', 'Cannot update this shipment, shipment has no invitation for user or not public'
+    response 'offer_already_made', "For 'propose' status, when shipment already has offered proposal"
   end
   # :nocov:
   def set_status

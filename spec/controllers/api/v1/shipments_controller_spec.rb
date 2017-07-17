@@ -11,7 +11,7 @@ describe Api::V1::ShipmentsController do
   end
 
 
-  shared_examples_for 'post action set' do |role, way|
+  shared_examples_for 'POST action' do |role, way|
     login_user
 
     before do
@@ -69,6 +69,19 @@ describe Api::V1::ShipmentsController do
         mail = ActionMailer::Base.deliveries.last
         expect(mail.to.first).to eq proposal.user.email
         expect(mail.subject).to eq 'You got offer for your proposal!'
+      else
+        expect(@json[:error]).to eq 'bad_role'
+      end
+    end
+
+    it 'cannot offer twice' do
+      @shipment.auction! # ff
+      proposal = create :proposal, shipment: @shipment
+      proposal.offered!
+      @shipment.offer!
+      json_query :post, :set_status, {id: @shipment.id, status: 'offer', proposal_id: proposal.id}
+      if role == :shipper
+        expect(@json[:error]).to eq 'offer_already_made'
       else
         expect(@json[:error]).to eq 'bad_role'
       end
@@ -162,11 +175,11 @@ describe Api::V1::ShipmentsController do
 
   end
 
-  describe 'Using set_status' do
-    it_should_behave_like 'post action set', :carrier, :private
-    it_should_behave_like 'post action set', :carrier, :public
-    it_should_behave_like 'post action set', :shipper, :private
-    it_should_behave_like 'post action set', :shipper, :public
+  describe 'Changing shipment status' do
+    it_should_behave_like 'POST action', :carrier, :private
+    it_should_behave_like 'POST action', :carrier, :public
+    it_should_behave_like 'POST action', :shipper, :private
+    it_should_behave_like 'POST action', :shipper, :public
   end
 
   context 'Carrier browsing shipments' do
@@ -179,6 +192,15 @@ describe Api::V1::ShipmentsController do
 
     it 'check carrier ability' do
       expect(@logged_in_user.has_role?(:carrier)).to eq true
+    end
+
+    it 'should not list unlisted shipments' do
+      shipper = @shipment.user
+      @shipment.auction!
+      @shipment.update_attribute :private_proposing, false
+      create_list :shipment, 3, user: shipper, aasm_state: 'confirming', private_proposing: false
+      json_query :get, :index, user_id: shipper.id
+      expect(@json[:results].size).to eq 1 # see only auction state
     end
 
     it 'should read invited shipment' do
@@ -389,6 +411,46 @@ describe Api::V1::ShipmentsController do
         create_list :shipment, 2
         json_query :get, :index
         expect(@json[:results].size).to eq 0
+      end
+
+    end
+
+    context 'changes during limited statuses' do
+
+      before do
+        @shipment = create :shipment, user: @logged_in_user
+        @shipment.auction!
+        carrier = create :user
+        carrier.add_role(:carrier)
+        ship_inv = create :ship_invitation, invitee: carrier, shipment: @shipment, invitee_email: carrier.email
+        @proposal = create :proposal, shipment: @shipment, price: 120, user: @logged_in_user, offered_at: 2.hours.ago, accepted_at: Time.zone.now
+        @shipment.offer!
+        @shipment.confirm!
+        expect(ActionMailer::Base.deliveries.size).to eq 3 # New proposal, You got offer, Carrier accepted offer
+        ActionMailer::Base.deliveries.clear
+      end
+
+
+      it 'should move to :pending from :confirmed' do
+        expect {
+          json_query :post, :update, id: @shipment.id, shipment: {price: 135.32}
+          @shipment.reload
+        }.to change(@shipment, :price)
+        expect(@shipment.state).to eq :pending
+        email = ActionMailer::Base.deliveries.last
+        expect(email.to.first).to eq @proposal.user.email
+        expect(email.subject).to eq "Shipment ID:#{@shipment.id} has been changed"
+        expect(@json[:status]).to eq 'ok'
+      end
+
+      it 'should not let change during prohibited statuses' do
+        @shipment.picked!
+        expect {
+          json_query :post, :update, id: @shipment.id, shipment: {price: 135.32}
+          @shipment.reload
+        }.not_to change(@shipment, :price)
+        expect(ActionMailer::Base.deliveries.size).to eq 0
+        expect(@json[:error]).to eq 'locked_status'
       end
 
     end
