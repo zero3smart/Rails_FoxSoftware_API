@@ -27,7 +27,7 @@ class Proposal < ActiveRecord::Base
   scope :by_highest, ->() {order('proposals.price DESC')}
   scope :by_lowest, ->() {order('proposals.price ASC')}
   scope :from_user, ->(user) {where('proposals.user_id = ?', user.id)}
-
+  scope :latest, ->() { order('proposals.created_at DESC') }
   resourcify
 
   after_create :new_notification
@@ -59,7 +59,7 @@ class Proposal < ActiveRecord::Base
   end
 
   def new_notification
-    ClientMailer.new_proposal(self).deliver_now
+    ShipperMailer.new_proposal(self).deliver_now
   end
 
 end
