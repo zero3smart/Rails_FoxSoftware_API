@@ -24,8 +24,13 @@
 #  index_address_infos_on_is_default  (is_default)
 #
 
-# STI
-class ShipperInfo < AddressInfo
+class UserInfo < AddressInfo
   belongs_to :user
-end
 
+  after_validation :validate_singularity
+
+  def validate_singularity
+    self.errors.add(:user_id, 'are already has UserInfo') if UserInfo.where(user_id: user_id).first
+  end
+
+end

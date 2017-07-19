@@ -24,8 +24,8 @@
 #  index_address_infos_on_is_default  (is_default)
 #
 
-# STI
-class ShipperInfo < AddressInfo
-  belongs_to :user
-end
+require 'rails_helper'
 
+RSpec.describe UserInfo, type: :model do
+
+end
