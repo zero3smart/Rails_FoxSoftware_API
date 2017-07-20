@@ -63,7 +63,8 @@ class Shipment < ActiveRecord::Base
   mount_uploader :picture, ShipmentPictureUploader
   resourcify
 
-  scope :active, ->() {where(active: true).where("aasm_state != 'draft'") }
+  # only those two status'es can be considered as active
+  scope :active, ->() {where(active: true).where('aasm_state IN (?)', %w(proposing pending)) }
   # dont use :public name as scope name :) unless you want be deep in shit
   scope :public_only, ->() {where(private_proposing: false)}
   before_create :set_secret_id
@@ -286,12 +287,18 @@ class Shipment < ActiveRecord::Base
     public_or_active?(param_secret_id) || user == current_user
   end
 
+  # Public active or accessible by secret_id
   def public_or_active?(param_secret_id)
-    public_active? || (private_proposing? && secret_id == param_secret_id && active?)
+    (public_active? || (private_proposing? && secret_id == param_secret_id)) && active_for_listing?
   end
 
   def public_active?
     !private_proposing? && active?
+  end
+
+  # Is active for listing?
+  def active_for_listing?
+    active? && [:pending, :proposing].include?(state)
   end
 
   def has_invitation_for?(user)
@@ -333,6 +340,7 @@ class Shipment < ActiveRecord::Base
           result = pause! if role == :shipper
         when 'offer'
           if role == :shipper
+            return :offer_already_made if offered_proposal
             proposal = proposals.where(id: proposal_id).first
             return :bad_proposal_id unless proposal
             proposal.offered!
