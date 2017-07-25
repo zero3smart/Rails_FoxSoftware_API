@@ -1,122 +1,81 @@
-# see http://www.emilsoman.com/blog/2013/05/18/building-a-tested/
-module DeviseTokenAuth
-  class SessionsController < DeviseTokenAuth::ApplicationController
-    before_filter :set_user_by_token, :only => [:destroy]
-    after_action :reset_session, :only => [:destroy]
+Rails.application.routes.draw do
 
-    def new
-      render text: 'Please login on main site.'
-      # render json: {
-      #   errors: [ I18n.t("devise_token_auth.sessions.not_supported")]
-      # }, status: 405
-    end
+  # TODO move under V1 version
+  mount_devise_token_auth_for 'User', at: 'auth'
 
-    def create
-      # Check
-      field = (resource_params.keys.map(&:to_sym) & resource_class.authentication_keys).first
+  get 'oauth_login/:provider' => 'devise_token_auth/registrations#oauth_login', as: :oauth_login
 
-      @resource = nil
-      if field
-        q_value = resource_params[field]
+  root to: 'home#index'
 
-        if resource_class.case_insensitive_keys.include?(field)
-          q_value.downcase!
+  get 'auth/registration' => 'authentication#registration' # stub for documentation
+  get 'auth/confirmation' => 'authentication#confirmation' # stub for documentation
+
+  mount RailsAdmin::Engine => '/fox-admin', as: 'rails_admin'
+
+  # when forwarding to next version set new default: true
+  # TODO -> path: false, constraints: { subdomain: 'api' }
+  namespace :api, defaults: {format: :json} do
+    api_version(module: 'V1', path: {value: 'v1'}, default: true) do
+
+      resources :shipments, except: [:new, :edit] do
+        member do
+          post :toggle_active
+          get :lowest_proposal
+          get :current_proposals
+          post :set_status
+          get :check_new_proposals
         end
-
-        q = "#{field.to_s} = ? AND provider='email'"
-
-        if ActiveRecord::Base.connection.adapter_name.downcase.starts_with? 'mysql'
-          q = "BINARY " + q
+        collection do
+          get :my_invitations
         end
-
-        @resource = resource_class.where(q, q_value).first
       end
+      resources :ship_invitations, only: [:index, :destroy]
 
-      if @resource and valid_params?(field, q_value) and @resource.valid_password?(resource_params[:password]) and (!@resource.respond_to?(:active_for_authentication?) or @resource.active_for_authentication?)
-        # create shipper id
-        @client_id = SecureRandom.urlsafe_base64(nil, false)
-        @token     = SecureRandom.urlsafe_base64(nil, false)
-
-        @resource.tokens[@client_id] = {
-          token: BCrypt::Password.create(@token),
-          expiry: (Time.now + DeviseTokenAuth.token_lifespan).to_i
-        }
-        @resource.save
-
-        sign_in(:user, @resource, store: false, bypass: false)
-
-        yield if block_given?
-
-        render json: {
-          data: @resource.token_validation_response
-        }
-
-      elsif @resource and not (!@resource.respond_to?(:active_for_authentication?) or @resource.active_for_authentication?)
-        render json: {
-          success: false,
-          errors: [ I18n.t("devise_token_auth.sessions.not_confirmed", email: @resource.email) ]
-        }, status: 401
-
-      else
-        render json: {
-          errors: [I18n.t("devise_token_auth.sessions.bad_credentials")]
-        }, status: 401
+      resources :proposals, except: [:new, :edit, :update, :destroy] do
+        member do
+          put :reject # reject by carrier
+          put :cancel # cancel by shipper
+        end
       end
-    end
-
-    def destroy
-      # remove auth instance variables so that after_filter does not run
-      user = remove_instance_variable(:@resource) if @resource
-      client_id = remove_instance_variable(:@client_id) if @client_id
-      remove_instance_variable(:@token) if @token
-
-      if user and client_id and user.tokens[client_id]
-        user.tokens.delete(client_id)
-        user.save!
-
-        yield if block_given?
-
-        render json: {
-          success:true
-        }, status: 200
-
-      else
-        render json: {
-          errors: [I18n.t("devise_token_auth.sessions.user_not_found")]
-        }, status: 404
+      resources :users, except: [:new, :update, :edit, :destroy, :index] do
+        collection do
+          post :get_address_by_zip
+        end
+        member do
+          get :stats
+        end
       end
-    end
-
-    def valid_params?(key, val)
-      resource_params[:password] && key && val
-    end
-
-    def resource_params
-      params.permit(devise_parameter_sanitizer.for(:sign_in))
-    end
-
-    def get_auth_params
-      auth_key = nil
-      auth_val = nil
-
-      # iterate thru allowed auth keys, use first found
-      resource_class.authentication_keys.each do |k|
-        if resource_params[k]
-          auth_val = resource_params[k]
-          auth_key = k
-          break
+      resources :address_infos do
+        member do
+          post :set_as_default_shipper
+          post :set_as_default_receiver
+        end
+        collection do
+          get :my_defaults
+          get :my_address
         end
       end
 
-      # honor devise configuration for case_insensitive_keys
-      if resource_class.case_insensitive_keys.include?(auth_key)
-        auth_val.downcase!
+      # belongs_to current_user
+      resources :my_connections, except: [:new, :update, :edit] do
+        collection do
+          post :invite_carrier
+          post :autocomplete_carriers
+        end
       end
 
-      return {
-        key: auth_key,
-        val: auth_val
-      }
-    end
+      resources :trackings, except: [:new, :update, :edit, :show]
+      resources :ratings, only: [:create, :update] do
+        collection do
+          get :read_rating
+        end
+      end
+    end# END V1
+
+    ## Remove default: true from previous version when create a new one
+    # api_version(module: 'V2', path: {value: 'v2'}, default: true) do
+    #
+    # end
   end
+
 end
